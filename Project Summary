@@ -1,0 +1,87 @@
+**AWS services used**
+- Amazon ECS (Fargate)
+- Amazon ECR
+- Application Load Balancer (ALB)
+- Amazon VPC and Security Groups
+- AWS IAM
+- Amazon CloudWatch Logs
+
+---
+
+## Docker & Containerization
+
+The LMS frontend was containerized using Docker with a lightweight Node.js base image. The container builds the production React app and serves it using a simple web server.
+
+I built the image locally, verified it worked, and then pushed it to Amazon ECR so ECS could pull it during deployment.
+
+---
+
+## Image Storage (Amazon ECR)
+
+The container image is stored in a private ECR repository and tagged as `latest`. ECS pulls this image automatically when starting tasks.
+
+Early on, I ran into image pull errors due to incorrect image references, which helped me understand how ECS resolves images and why tagging and repository names matter.
+
+---
+
+## Deploying with ECS Fargate
+
+The application runs as a service on ECS Fargate, which means there are no EC2 instances to manage. The service maintains the desired number of running tasks and automatically replaces unhealthy containers.
+
+Once deployed successfully, the service reaches a steady state with healthy tasks registered to the load balancer.
+
+---
+
+## Load Balancing & Networking
+
+Traffic reaches the application through an internet-facing Application Load Balancer. The load balancer forwards requests to the ECS tasks on port `3000`.
+
+Security groups are configured so:
+- The ALB accepts traffic from the internet
+- The containers only accept traffic from the ALB
+
+This setup prevents direct access to the containers and keeps the architecture clean and secure.
+
+---
+
+## Troubleshooting in Practice
+
+### Issue 1: Health Check Failures
+
+I intentionally configured an invalid container health check. As expected, ECS marked the tasks as unhealthy and continuously restarted them.
+
+**What I learned:**
+- Health checks directly affect task lifecycle
+- A single incorrect endpoint can prevent deployments
+
+**Fix:**  
+I updated the health check to point to a valid endpoint and redeployed the service.
+
+---
+
+### Issue 2: Resource Constraints
+
+Next, I reduced CPU and memory limits too far, which caused tasks to stop unexpectedly.
+
+**What I learned:**
+- Containers can fail silently if under-provisioned
+- ECS clearly reports resource-related stop reasons if you know where to look
+
+**Fix:**  
+I increased CPU and memory to appropriate levels and updated the service with a new task definition revision.
+
+---
+
+## How I Verified Everything Worked
+
+- ECS service reached steady state
+- Tasks stayed in a RUNNING state
+- Target group health checks passed
+- No critical errors appeared in CloudWatch logs
+- Application loaded successfully via the ALB DNS name
+
+---
+
+## Key Takeaways
+
+This project helped me connect the dots between Docker, ECS, and AWS networking. More importantly, it taught me how to debug container deployments instead of just redeploying until something works.
